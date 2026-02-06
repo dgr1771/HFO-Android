@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>HFO - Human Function Optimization</title>
+    <style>
+        :root { /* 預設黑金 */
+            --bg: #050505; --card: #0d0d0f; --accent: #d4af37; --text: #ffffff; --dim: #666; --ring-bg: rgba(212,175,55,0.1);
+        }
+        /* 御女風：煙粉 */
+        body.theme-dusty { --bg: #1a161d; --card: #251f28; --accent: #dca8b7; --text: #f5eef0; --dim: #7a6e7d; --ring-bg: rgba(220,168,183,0.1); }
+        /* 美少女風：薰衣草 */
+        body.theme-lavender { --bg: #2d2430; --card: #3a2f3d; --accent: #c3a6ff; --text: #eee5ff; --dim: #9283a3; --ring-bg: rgba(195,166,255,0.1); }
+        /* 賽博黑粉 */
+        body.theme-blackpink { --bg: #000000; --card: #111111; --accent: #ff007a; --text: #ffffff; --dim: #444444; --ring-bg: rgba(255,0,122,0.1); }
+        /* 蒂芙尼藍配粉 */
+        body.theme-tiffany { --bg: #141a1a; --card: #1d2626; --accent: #81d8d0; --text: #fce4ec; --dim: #5c7d7a; --ring-bg: rgba(129,216,208,0.1); }
+
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; transition: 0.5s; }
+        header { padding: 50px 25px 10px; display: flex; justify-content: space-between; align-items: flex-end; }
+        header h1 { margin: 0; font-size: 24px; letter-spacing: 5px; color: var(--accent); font-weight: 200; }
+        
+        /* 配色切換器導航 */
+        .theme-selector { display: flex; gap: 8px; overflow-x: auto; padding: 10px 25px; white-space: nowrap; scrollbar-width: none; }
+        .theme-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0; }
+
+        .viewport { flex: 1; padding: 0 20px; overflow-y: auto; padding-bottom: 100px; }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.4s; }
+
+        /* UI 核心元件 */
+        .sync-container { height: 260px; display: flex; align-items: center; justify-content: center; position: relative; }
+        .progress-ring { position: absolute; width: 190px; height: 190px; transform: rotate(-90deg); }
+        .progress-ring circle { fill: transparent; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 534; stroke-dashoffset: 534; transition: 1s linear; }
+        .sphere { width: 60px; height: 60px; border-radius: 50%; border: 1.5px solid var(--accent); transition: 1s; z-index: 5; }
+        .sphere.expand { transform: scale(1.8); background: var(--ring-bg); box-shadow: 0 0 30px var(--accent); }
+
+        .card { background: var(--card); padding: 20px; margin-bottom: 12px; border-radius: 12px; border-left: 4px solid var(--accent); cursor: pointer; }
+        #duration-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.96); z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        .time-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 85%; }
+        .time-btn { border: 1px solid var(--accent); color: var(--accent); background: transparent; padding: 15px; border-radius: 8px; font-size: 15px; }
+
+        nav { position: fixed; bottom: 0; width: 100%; height: 85px; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); display: flex; border-top: 1px solid rgba(255,255,255,0.05); }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--dim); font-size: 10px; }
+        .nav-item.active { color: var(--accent); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="theme-dusty">
+
+<header>
+    <h1>HFO</h1>
+    <span style="font-size:10px; color:var(--dim);">v1.6.0</span>
+</header>
+
+<div class="theme-selector">
+    <div class="theme-dot" style="background:#d4af37" onclick="setTheme('')"></div>
+    <div class="theme-dot" style="background:#dca8b7" onclick="setTheme('theme-dusty')"></div>
+    <div class="theme-dot" style="background:#c3a6ff" onclick="setTheme('theme-lavender')"></div>
+    <div class="theme-dot" style="background:#ff007a" onclick="setTheme('theme-blackpink')"></div>
+    <div class="theme-dot" style="background:#81d8d0" onclick="setTheme('theme-tiffany')"></div>
+    <span style="font-size:10px; color:var(--dim); margin-left:5px;">風格切換</span>
+</div>
+
+<div id="duration-overlay">
+    <h3 style="color:var(--accent); font-weight:200; margin-bottom:30px;">訓練時長 / DURATION</h3>
+    <div class="time-grid">
+        <button class="time-btn" onclick="confirmStart(30)">30 MIN</button>
+        <button class="time-btn" onclick="confirmStart(45)">45 MIN</button>
+        <button class="time-btn" onclick="confirmStart(60)">60 MIN</button>
+        <button class="time-btn" onclick="confirmStart(90)">90 MIN</button>
+    </div>
+    <p style="color:white; margin-top:20px; opacity:0.4;" onclick="this.parentElement.style.display='none'">取消</p>
+</div>
+
+<div class="viewport">
+    <section id="plan" class="screen active">
+        <div class="card" onclick="openSelector(1)">
+            <h3>I. 神經解耦</h3>
+            <p style="font-size:11px; color:var(--dim);">建立獨立 PC 肌控制。隔離括約肌反射。</p>
+        </div>
+        <div class="card" onclick="openSelector(2)">
+            <h3>II. 路徑覺醒</h3>
+            <p style="font-size:11px; color:var(--dim);">S > PC 波浪輪動收縮。喚醒脊柱傳導路徑。</p>
+        </div>
+        <div class="card" onclick="openSelector(3)">
+            <h3>III. 巔峰耦合</h3>
+            <p style="font-size:11px; color:var(--dim);">包含屏息泵動與胸部神經耦合訓練。</p>
+        </div>
+
+        <div style="background:var(--card); border-radius:12px; padding:15px; margin-top:10px;">
+            <svg viewBox="0 0 200 200" style="width:100%; height:240px;">
+                <path d="M150,40 Q170,80 150,160" fill="none" stroke="var(--dim)" stroke-width="2" opacity="0.3"/>
+                <circle cx="120" cy="80" r="5" fill="var(--accent)" style="animation:pulse 2s infinite" /> <circle cx="110" cy="155" r="7" fill="var(--accent)" style="animation:pulse 2s infinite" /> <circle cx="145" cy="158" r="5" fill="var(--accent)" style="animation:pulse 2s infinite" /> <text x="75" y="185" fill="var(--accent)" font-size="8">S-PC-CHEST SYNC</text>
+            </svg>
+        </div>
+    </section>
+
+    <section id="run" class="screen">
+        <div class="sync-container">
+            <svg class="progress-ring"><circle id="ring" cx="95" cy="95" r="85"></circle></svg>
+            <div id="sphere" class="sphere"></div>
+        </div>
+        <div id="timer" style="font-size:60px; font-weight:100; text-align:center; color:var(--accent);">00:00</div>
+        <p id="instr" style="text-align:center; color:var(--dim); font-size:12px; padding:0 30px;">PREPARE...</p>
+        <button style="background:var(--danger); color:white; width:100%; padding:15px; margin-top:30px; border:none; border-radius:8px;" onclick="stopTraining()">中止 / ABORT</button>
+    </section>
+</div>
+
+<nav>
+    <div class="nav-item active" onclick="switchTab('plan', this)"><b>◈</b><span>計劃</span></div>
+    <div class="nav-item" onclick="switchTab('run', this)"><b>◎</b><span>執行</span></div>
+</nav>
+
+<script>
+    let audioCtx, gainNode, isRunning = false, selectedLvl = 1;
+    const synth = window.speechSynthesis;
+    const circumference = 2 * Math.PI * 85;
+
+    const courseData = {
+        1: { steps: [{t:"吸氣：放鬆", v:"吸氣，完全放鬆恥骨尾骨肌", d:6}, {t:"呼氣：感知", v:"呼氣，輕柔收縮 PC 肌肉", d:6}] },
+        2: { steps: [{t:"吸氣預備", v:"深吸氣，匯集盆底能量", d:6}, {t:"輪動收縮", v:"呼氣。先縮緊括約肌，隨後滾動至 PC 肌肉提拉", d:10}] },
+        3: { steps: [
+            {t:"深吸氣", v:"深吸氣，填滿肺部，準備耦合重塑", d:7},
+            {t:"屏息：輪動鎖定", v:"屏住呼吸！鎖定括約肌與 PC 肌，同時按壓胸部節點", d:12},
+            {t:"高頻泵動", v:"維持屏息！快速顫動 PC 肌肉，映射能量至 T4", d:15},
+            {t:"呼氣：擴散", v:"緩慢呼氣，感受波浪擴散", d:8}
+        ] }
+    };
+
+    function setTheme(theme) { document.body.className = theme; }
+    function setRing(p) { document.getElementById('ring').style.strokeDashoffset = circumference - (p/100)*circumference; }
+
+    async function confirmStart(mins) {
+        document.getElementById('duration-overlay').style.display='none';
+        switchTab('run', document.querySelectorAll('.nav-item')[1]);
+        if(!audioCtx) {
+            audioCtx = new AudioContext(); gainNode = audioCtx.createGain(); gainNode.connect(audioCtx.destination);
+            const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*2, audioCtx.sampleRate);
+            const d = buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+            const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+            const f = audioCtx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=320;
+            src.connect(f); f.connect(gainNode); src.start();
+        }
+        gainNode.gain.setTargetAtTime(0.06, audioCtx.currentTime, 1.5);
+        runHFO(mins);
+    }
+
+    async function runHFO(mins) {
+        isRunning = true;
+        const level = courseData[selectedLvl];
+        const loopTime = level.steps.reduce((a,b)=>a+b.d, 0);
+        const totalLoops = Math.ceil((mins*60)/loopTime);
+        for(let i=0; i<totalLoops; i++) {
+            for(let s of level.steps) {
+                if(!isRunning) return;
+                document.getElementById('instr').innerText = `${s.t} (${i+1}/${totalLoops})`;
+                document.getElementById('sphere').className = s.t.includes('吸') ? 'sphere expand' : 'sphere';
+                let u = new SpeechSynthesisUtterance(s.v); u.lang='zh-CN'; u.rate=0.8; synth.speak(u);
+                let d = s.d; while(d > 0 && isRunning) {
+                    document.getElementById('timer').innerText = `00:${d<10?'0'+d:d}`;
+                    setRing((d/s.d)*100); await new Promise(r=>setTimeout(r,1000)); d--;
+                }
+            }
+        }
+        stopTraining();
+    }
+
+    function openSelector(lvl) { selectedLvl=lvl; document.getElementById('duration-overlay').style.display='flex'; }
+    function switchTab(t, e) {
+        document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+        e.classList.add('active');
+    }
+    function stopTraining() { isRunning=false; synth.cancel(); gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 1); }
+</script>
+</body>
+</html>
